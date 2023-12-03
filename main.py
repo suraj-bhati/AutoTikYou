@@ -1,54 +1,84 @@
-
 import os
 import time
-import json
+import logging
 
-while True:
-    # Step 1: Run get_data.py
-    print("Running get_data.py...")
-    os.system("python3 get_data.py")
-    
-    # Universal wait time
-    print("Waiting for 10 seconds...")
-    time.sleep(10)
-    
-    # Step 2: Check for the existence of data.json
-    if os.path.exists("data.json"):
-        # Step 3: Run youtube_upload.py
-        print("Running youtube_upload.py...")
+# Configure logging
+logging.basicConfig(filename='main.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def run_get_data_script():
+    print("Attempting to run get_data.py")
+    logging.info("Attempting to run get_data.py")
+    try:
+        os.system("python3 get_data.py")
+        print("Successfully ran get_data.py")
+        logging.info("Successfully ran get_data.py")
+    except Exception as e:
+        print(f"Error in get_data.py: {e}")
+        logging.error(f"Error in get_data.py: {e}")
+        return False
+    print("Waiting 10 seconds after get_data.py")
+    logging.info("Waiting 10 seconds after get_data.py")
+    time.sleep(10)  # 10-second delay after running get_data.py
+    return True
+
+def run_youtube_upload_script():
+    print("Attempting to run youtube_upload.py")
+    logging.info("Attempting to run youtube_upload.py")
+    try:
         os.system("python3 youtube_upload.py")
-        
-        # Universal wait time
-        print("Waiting for 10 seconds...")
-        time.sleep(10)
-        
-        # Step 4: Delete the downloaded video (you'll need to know the video filename)
-        # os.remove("your_downloaded_video_file.mp4")
-        
-        # Step 5: Delete 'data.json'
-        print("Deleting data.json...")
-        os.remove("data.json")
-        
-        # Step 6: Update urls.csv
-        print("Updating urls.csv...")
-        with open("urls.csv", "r") as f:
-            lines = f.readlines()
-        with open("urls.csv", "w") as f:
-            f.writelines(lines[1:])
-        
-        # Universal wait time
-        print("Waiting for 10 seconds...")
-        time.sleep(10)
-        
-        # Step 7: Display remaining URLs count
-        remaining_count = len(lines) - 1
-        print(f"Remaining URLs: {remaining_count}")
-        
-        # Wait 6 hours before next loop
-        print("Waiting for 6 hours before next loop...")
-        time.sleep(21600 * 6)  # 6 hours
-        
-    else:
-        print("Error: data.json does not exist.")
-        break
+        print("Successfully ran youtube_upload.py")
+        logging.info("Successfully ran youtube_upload.py")
+    except Exception as e:
+        print(f"Error in youtube_upload.py: {e}")
+        logging.error(f"Error in youtube_upload.py: {e}")
+        return False
+    print("Waiting 10 seconds after youtube_upload.py")
+    logging.info("Waiting 10 seconds after youtube_upload.py")
+    time.sleep(10)  # 10-second delay after running youtube_upload.py
+    return True
 
+def update_urls_csv():
+    print("Attempting to update urls.csv")
+    logging.info("Attempting to update urls.csv")
+    try:
+        with open("urls.csv", "r") as file:
+            lines = file.readlines()
+        if lines:
+            # Remove the first line (processed URL)
+            lines.pop(0)
+            with open("urls.csv", "w") as file:
+                file.writelines(lines)
+            print(f"Processed URL removed from urls.csv. Remaining URLs: {len(lines)}")
+            logging.info(f"Processed URL removed from urls.csv. Remaining URLs: {len(lines)}")
+        else:
+            print("No more URLs to process in urls.csv.")
+            logging.info("No more URLs to process in urls.csv.")
+    except Exception as e:
+        print(f"Error updating urls.csv: {e}")
+        logging.error(f"Error updating urls.csv: {e}")
+
+def main():
+    loop_counter = 0
+    while True:
+        loop_counter += 1
+        print(f"Starting Loop {loop_counter}")
+        logging.info(f"Starting Loop {loop_counter}")
+
+        if run_get_data_script():
+            if os.path.exists("data.json"):
+                if run_youtube_upload_script():
+                    print("Deleting data.json file")
+                    logging.info("Deleting data.json file")
+                    os.remove("data.json")
+                    update_urls_csv()
+                    print("Waiting 10 seconds after updating urls.csv")
+                    logging.info("Waiting 10 seconds after updating urls.csv")
+                    time.sleep(10)  # 10-second delay after updating urls.csv
+
+        waiting_time = 21600  # 6 hours in seconds
+        print(f"Completed Loop {loop_counter}. Waiting for {waiting_time / 3600} hours before the next iteration.")
+        logging.info(f"Completed Loop {loop_counter}. Waiting for {waiting_time / 3600} hours before the next iteration.")
+        time.sleep(waiting_time)  # Wait for 6 hours
+
+if __name__ == "__main__":
+    main()
