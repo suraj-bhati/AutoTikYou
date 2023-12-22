@@ -1,12 +1,15 @@
 import json
 import os
-import googleapiclient.discovery
 import requests
+import googleapiclient.discovery
 from googleapiclient.http import MediaFileUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2.credentials import Credentials
+from moviepy.editor import VideoFileClip
+import sys
 
 def extract_details_from_json(filename: str) -> dict:
+    print("Extracting details from JSON file...")
     with open(filename, 'r') as file:
         data = json.load(file)
         
@@ -14,6 +17,7 @@ def extract_details_from_json(filename: str) -> dict:
         unique_id = data.get('author', {}).get('unique_id', 'Not Found')
         desc = data.get('desc', 'Not Found')
         
+        print(f"Extracted details: URL - {nwm_video_url_HQ}, Unique ID - {unique_id}, Description - {desc}")
         return {
             'nwm_video_url_HQ': nwm_video_url_HQ,
             'unique_id': unique_id,
@@ -21,10 +25,19 @@ def extract_details_from_json(filename: str) -> dict:
         }
 
 def download_video(video_url: str, filename: str):
+    print(f"Downloading video from {video_url}...")
     response = requests.get(video_url, stream=True)
     with open(filename, 'wb') as file:
         for chunk in response.iter_content(chunk_size=8192):
             file.write(chunk)
+    print(f"Video downloaded and saved as {filename}")
+
+def check_video_length(filename: str) -> bool:
+    print(f"Checking video length for {filename}...")
+    with VideoFileClip(filename) as video:
+        video_length = video.duration
+        print(f"Video length: {video_length} seconds")
+        return video_length <= 59.99
 
 CREDENTIALS_FILE = "youtube_credentials.json"
 
@@ -58,31 +71,54 @@ def authenticate_youtube():
 
     return googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
 
-
-def upload_video_to_youtube(filename: str, description: str, title: str):
-    youtube = authenticate_youtube()
-    tags = description.split()
-    request = youtube.videos().insert(
-        part="snippet,status",
-        body={
-            "snippet": {
-                "title": title,
-                "description": description,
-                "tags": tags,
-                "categoryId": "22"
+def upload_video_to_youtube(filename: str, description: str, title: str) -> bool:
+    print(f"Preparing to upload video: {filename}")
+    if check_video_length(filename):
+        print("Video length is within YouTube Shorts limits. Proceeding to upload.")
+        youtube = authenticate_youtube()
+        print("YouTube API authenticated.")
+        tags = description.split()
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body={
+                "snippet": {
+                    "title": title,
+                    "description": description,
+                    "tags": tags,
+                    "categoryId": "22"
+                },
+                "status": {
+                    "privacyStatus": "public"
+                }
             },
-            "status": {
-                "privacyStatus": "public"
-            }
-        },
-        media_body=MediaFileUpload(filename)
-    )
-    response = request.execute()
-    print(f"Uploaded video with ID {response['id']}")
+            media_body=MediaFileUpload(filename)
+        )
+        response = request.execute()
+        print(f"Video uploaded successfully with ID {response['id']}")
+        os.remove(filename)
+        print(f"Deleted video file: {filename} after successful upload.")
+        return True
+    else:
+        print("The video is too long for YouTube Shorts. Skipping upload.")
+        os.remove(filename)
+        print(f"Deleted video file: {filename}")
+        return False
 
-details = extract_details_from_json("data.json")
-download_video(details['nwm_video_url_HQ'], f"{details['unique_id']}.mp4")
-description = f"{details['desc']} by {details['unique_id']}"
-title = details['desc'][:95]  # Limit to 95 characters
-upload_video_to_youtube(f"{details['unique_id']}.mp4", description, title)
+# Constants
+CREDENTIALS_FILE = "youtube_credentials.json"
 
+# Script execution
+if __name__ == "__main__":
+    print("Starting script execution...")
+    details = extract_details_from_json("data.json")
+    video_filename = f"{details['unique_id']}.mp4"
+    download_video(details['nwm_video_url_HQ'], video_filename)
+    description = f"{details['desc']} by {details['unique_id']}"
+    title = details['desc'][:95]  # Limit to 95 characters
+
+    if upload_video_to_youtube(video_filename, description, title):
+        sys.exit(0)  # Exit with 0 for successful upload
+    else:
+        sys.exit(1)  # Exit with 1 for skipped upload
+
+    print("Script execution completed.")
